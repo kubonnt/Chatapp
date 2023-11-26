@@ -64,7 +64,7 @@ impl Hub {
         if self.output_sender.receiver_count() > 0 {
             self.output_sender
                 .send(OutputParcel::new(client_id, output))
-                .unwrap()
+                .unwrap();
         }
     }
 
