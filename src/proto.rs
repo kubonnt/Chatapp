@@ -4,43 +4,43 @@ use serde::de::Unexpected::Str;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag="type", content="payload", rename_all="camelCase")]
+#[serde(tag = "type", content = "payload", rename_all = "camelCase")]
 pub enum Input {
-    #[serde(rename="join")]
+    #[serde(rename = "join")]
     Join(JoinInput),
-    #[serde(rename="post")]
+    #[serde(rename = "post")]
     Post(PostInput),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag="type", content="payload", rename_all="camelCase")]
+#[serde(tag = "type", content = "payload", rename_all = "camelCase")]
 pub enum Output {
-    #[serde(rename="error")]
+    #[serde(rename = "error")]
     Error(OutputError),
-    #[serde(rename="alive")]
+    #[serde(rename = "alive")]
     Alive,
-    #[serde(rename="joined")]
+    #[serde(rename = "joined")]
     Joined(JoinedOutput),
-    #[serde(rename="user-joined")]
+    #[serde(rename = "user-joined")]
     UserJoined(UserJoinedOutput),
-    #[serde(rename="user-left")]
+    #[serde(rename = "user-left")]
     UserLeft(UserLeftOutput),
-    #[serde(rename="posted")]
+    #[serde(rename = "posted")]
     Posted(PostedOutput),
-    #[serde(rename="user-posted")]
-    UserPosted(UserPostedOutput)
+    #[serde(rename = "user-posted")]
+    UserPosted(UserPostedOutput),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(tag="code")]
+#[serde(tag = "code")]
 pub enum OutputError {
-    #[serde(rename="name-taked")]
-    NameTake,
-    #[serde(rename="invalid-name")]
+    #[serde(rename = "name-taken")]
+    NameTaken,
+    #[serde(rename = "invalid-name")]
     InvalidName,
-    #[serde(rename="not-joined")]
+    #[serde(rename = "not-joined")]
     NotJoined,
-    #[serde(rename="invalid-message-body")]
+    #[serde(rename = "invalid-message-body")]
     InvalidMessageBody,
 }
 
@@ -69,26 +69,26 @@ impl OutputParcel {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct JoinInput {
     pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct PostInput {
-    pub name: String,
+    pub body: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct UserOutput {
     pub id: Uuid,
     pub name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct MessageOutput {
     pub id: Uuid,
     pub user: UserOutput,
@@ -97,7 +97,7 @@ pub struct MessageOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct JoinedOutput {
     pub user: UserOutput,
     pub others: Vec<UserOutput>,
@@ -105,25 +105,25 @@ pub struct JoinedOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct UserJoinedOutput {
     pub user: UserOutput,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct UserLeftOutput {
     pub user_id: Uuid,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct PostedOutput {
     pub message: MessageOutput,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct UserPostedOutput {
     pub message: MessageOutput,
 }

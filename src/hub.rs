@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use chrono::Utc;
-use futures::future::err;
 use futures::StreamExt;
 use regex::Regex;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -20,6 +19,10 @@ use crate::proto::{
 };
 
 const OUTPUT_CHANNEL_SIZE: usize = 16;
+const MAX_MESSAGE_BODY_LENGTH: usize = 256;
+lazy_static! {
+    static ref USER_NAME_REGEX: Regex = Regex::new("[A-Za-z\\s]{4,24}").unwrap();
+}
 
 // HubOptions helps to separate domain-level options which could be read-in from and external
 // configuration file in the future.
@@ -95,7 +98,7 @@ impl Hub {
         self.output_sender.subscribe()
     }
 
-    pub async fn on_disconnect(&self, client_id:Uuid) {
+    pub async fn on_disconnect(&self, client_id: Uuid) {
         // Remove user on disconnect
         if self.users.write().await.remove(&client_id).is_some() {
             self.send_ignored(
@@ -117,5 +120,123 @@ impl Hub {
             time::sleep(alive_interval).await;
             self.send(Output::Alive).await;
         }
+    }
+
+    pub async fn run(&self, receiver: UnboundedReceiver<InputParcel>) {
+        let ticking_alive = self.tick_alive();
+        let processing = receiver.for_each(|input_parcel| self.process(input_parcel));
+        tokio::select! {
+            _ = ticking_alive => {},
+            _ = processing => {},
+        }
+    }
+
+    async fn process(&self, input_parcel: InputParcel) {
+        match input_parcel.input {
+            Input::Join(input) => self.process_join(input_parcel.client_id, input).await,
+            Input::Post(input) => self.process_post(input_parcel.client_id, input).await,
+        }
+    }
+
+    async fn process_join(&self, client_id: Uuid, input: JoinInput) {
+        let user_name = input.name.trim();
+
+        // TEMP check if user's name is taken
+        if self
+            .users
+            .read()
+            .await
+            .values()
+            .any(|user| user.name == user_name)
+        {
+            self.send_error(client_id, OutputError::NameTaken);
+            return;
+        }
+
+        if !USER_NAME_REGEX.is_match(user_name) {
+            self.send_error(client_id, OutputError::InvalidName);
+            return;
+        }
+
+        let user = User::new(client_id, user_name);
+        self.users.write().await.insert(client_id, user.clone());
+
+        let user_output = UserOutput::new(client_id, user_name);
+        let other_users = self
+            .users
+            .read()
+            .await
+            .values()
+            .filter_map(|user| {
+                if user.id != client_id {
+                    Some(UserOutput::new(user.id, &user.name))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let messages = self
+            .feed
+            .read()
+            .await
+            .messages_iter()
+            .map(|message| {
+                MessageOutput::new(
+                    message.id,
+                    UserOutput::new(message.user.id, &message.user.name),
+                    &message.body,
+                    message.created_at,
+                )
+            })
+            .collect();
+
+        self.send_targeted(
+            client_id,
+            Output::Joined(JoinedOutput::new(
+                user_output.clone(),
+                other_users,
+                messages,
+            )),
+        );
+
+        self.send_ignored(
+            client_id,
+            Output::UserJoined(UserJoinedOutput::new(user_output)),
+        ).await;
+    }
+
+    async fn process_post(&self, client_id: Uuid, input: PostInput) {
+        let user = if let Some(user) = self.users.read().await.get(&client_id) {
+            user.clone().unwrap()
+        } else {
+            self.send_error(client_id, OutputError::NotJoined);
+            return;
+        };
+
+        if input.body.is_empty() || input.body.len() > MAX_MESSAGE_BODY_LENGTH {
+            self.send_error(client_id, OutputError::InvalidMessageBody);
+            return;
+        }
+
+        let message = Message::new(Uuid::new_v4(), user.clone(), &input.body, Utc::now());
+        self.feed.write().await.add_message(message.clone());
+        
+        let message_output = MessageOutput::new(
+            message.id,
+            UserOutput::new(user.id, &user.name),
+            &message.body,
+            message.created_at,
+        );
+
+        self.send_targeted(
+            client_id,
+            Output::Posted(PostedOutput::new(message_output.clone())),
+        );
+
+        self.send_ignored(
+            client_id,
+            Output::UserPosted(UserPostedOutput::new(message_output))
+        ).await;
     }
 }
