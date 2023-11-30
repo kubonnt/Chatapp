@@ -6,3 +6,4 @@ pub mod hub;
 pub mod model;
 pub mod server;
 mod client;
+mod error;

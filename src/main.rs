@@ -1,5 +1,9 @@
-mod model;
+use Messenger::server::Server;
 
-fn main() {
-    println!("Hello, world!");
+#[tokio::main]
+async fn main() {
+    env_logger::init();
+
+    let server = Server::new(8080);
+    server.run().await;
 }

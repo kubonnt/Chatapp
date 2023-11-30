@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use futures::{StreamExt, TryStreamExt};
 use log::{error, info};
+use tokio::io::AsyncWriteExt;
 use tokio::signal;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
@@ -40,7 +41,7 @@ impl Server {
                 move
                     |ws: warp::ws::Ws,
                      input_sender: UnboundedSender<InputParcel>,
-                     hub: Arc<hub>| {
+                     hub: Arc<Hub>| {
                     ws.on_upgrade(move |web_socket| async move {
                         tokio::spawn(Self::process_client(hub, web_socket, input_sender));
                     })
@@ -62,5 +63,43 @@ impl Server {
             _ = serving => {},
             _ = running_hub => {},
         }
+    }
+
+    async fn process_client(
+        hub: Arc<Hub>,
+        web_socket: WebSocket,
+        input_sender: UnboundedSender<InputParcel>
+    ) {
+        let output_receiver = hub.subscribe();
+        let (ws_sink, ws_stream) = web_socket.split();
+        let client = Client::new();
+
+        info!("Client {} connected", client.id);
+
+        let reading = client
+            .read_input(ws_stream)
+            .try_for_each(|input_parcel| async {
+                input_sender.send(input_parcel).unwrap();
+                Ok(())
+            });
+
+        let (tx, rx) = mpsc::unbounded_channel();
+        tokio::spawn(rx.forward(ws_sink));
+        let writing = client
+            .write_output(output_receiver.into_stream())
+            .try_for_each(|message| async {
+                tx.send(Ok(message)).unwrap();
+                Ok(())
+            });
+
+        if let Err(err) = tokio::select! {
+            result = reading => result,
+            result = writing => result,
+        } {
+            error!("Client connection error: {}", err.unwrap());
+        }
+
+        hub.on_disconnect(client.id).await;
+        info!("Client {} disconnected", client.id);
     }
 }
