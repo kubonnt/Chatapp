@@ -208,7 +208,7 @@ impl Hub {
 
     async fn process_post(&self, client_id: Uuid, input: PostInput) {
         let user = if let Some(user) = self.users.read().await.get(&client_id) {
-            user.clone().unwrap()
+            user.clone()
         } else {
             self.send_error(client_id, OutputError::NotJoined);
             return;
